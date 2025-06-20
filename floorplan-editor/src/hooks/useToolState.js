@@ -13,26 +13,24 @@ export const TOOLS = {
  * Custom hook to manage the state of the editor's tools.
  */
 const useToolState = () => {
-  // The currently active tool
+  // Tool selection state
   const [activeTool, setActiveTool] = useState(TOOLS.MAGIC_BRUSH);
   
-  // The currently selected color (default to light blue)
+  // Color state
   const [selectedColor, setSelectedColor] = useState('#ADD8E6');
   
-  // The currently selected text size
+  // Text formatting state
   const [selectedTextSize, setSelectedTextSize] = useState(16);
-  
-  // Whether new text should be bold
   const [selectedBold, setSelectedBold] = useState(false);
   
-  // For the text tool
+  // Text elements state
   const [textElements, setTextElements] = useState([]);
   const [activeTextId, setActiveTextId] = useState(null);
   
-  // Add a new text element
+  // Text element operations
   const addTextElement = (x, y, text, color = '#000000', size = 16, bold = false) => {
     const newElement = {
-      id: Date.now(), // Simple unique ID
+      id: Date.now(),
       x,
       y,
       text,
@@ -44,41 +42,42 @@ const useToolState = () => {
     return newElement.id;
   };
 
-  // Update an existing text element
   const updateTextElement = (id, updates) => {
     setTextElements(prev => 
-      prev.map(el => {
-        if (el.id === id) {
-          return { ...el, ...updates };
-        }
-        return el;
-      })
+      prev.map(el => el.id === id ? { ...el, ...updates } : el)
     );
   };
 
-  // Delete a text element
   const deleteTextElement = (id) => {
     setTextElements(prev => prev.filter(el => el.id !== id));
   };
   
-  // Move a text element to a new position
   const moveTextElement = (id, newX, newY) => {
     updateTextElement(id, { x: newX, y: newY });
   };
   
   return {
+    // Tool selection
     activeTool,
     setActiveTool,
+    
+    // Color selection
     selectedColor,
     setSelectedColor,
+    
+    // Text formatting
     selectedTextSize,
     setSelectedTextSize,
     selectedBold,
     setSelectedBold,
+    
+    // Text elements
     textElements,
     setTextElements,
     activeTextId,
     setActiveTextId,
+    
+    // Text operations
     addTextElement,
     updateTextElement,
     moveTextElement,

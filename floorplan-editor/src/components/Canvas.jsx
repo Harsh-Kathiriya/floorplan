@@ -1,10 +1,17 @@
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import useFloodFill from '../hooks/useFloodFill';
 import { TOOLS } from '../hooks/useToolState';
-import { FaSpinner, FaFont, FaCheck, FaTimes, FaTrash, FaFillDrip } from 'react-icons/fa';
+import { useToolContext } from '../contexts/ToolContext';
+import TextInput from './TextInput';
+import LoadingOverlay from './LoadingOverlay';
+import ContextualFillButton from './ContextualFillButton';
+import NoImagePlaceholder from './NoImagePlaceholder';
+import { hexToRgb } from '../utils/colorUtils';
+import { calculateImageDimensions, getColorAtPosition } from '../utils/canvasUtils';
 
-const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditComplete, onInitialDraw }, ref) => {
+const Canvas = forwardRef(({ selectedImage, historyImageData, onEditComplete, onInitialDraw }, ref) => {
+  const toolState = useToolContext();
   const containerRef = useRef(null);
   const imageCanvasRef = useRef(null);
   const textCanvasRef = useRef(null);
@@ -37,24 +44,12 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
 
   // Expose functions through the ref
   useImperativeHandle(ref, () => ({
-    saveImage: () => {
-      saveImage();
-    },
-    getImageData: () => {
-      return getImageData();
-    },
-    setImageData: (imageData) => {
-      setImageData(imageData);
-    },
-    drawImage: () => {
-      drawImage(false); // Don't trigger initial draw callback on demand
-    },
-    resetToOriginalImage: () => {
-      resetToOriginalImage();
-    },
-    fillSelection: () => {
-      fillSelection();
-    }
+    saveImage,
+    getImageData,
+    setImageData,
+    drawImage: () => drawImage(false),
+    resetToOriginalImage,
+    fillSelection
   }));
 
   // Get the current image data from the canvas
@@ -78,7 +73,6 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
   // Reset the canvas to show the original image without any edits
   const resetToOriginalImage = () => {
     if (!imageCanvasRef.current || !selectedImage) return;
-    
     drawImage(false);
   };
 
@@ -93,23 +87,12 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
       setIsLoading(true);
       const img = new Image();
       img.onload = () => {
-        const canvasAspectRatio = canvas.width / canvas.height;
-        const imageAspectRatio = img.width / img.height;
-        let drawWidth, drawHeight, x, y;
-
-        if (canvasAspectRatio > imageAspectRatio) {
-          // Canvas is wider than the image
-          drawHeight = canvas.height;
-          drawWidth = drawHeight * imageAspectRatio;
-          x = (canvas.width - drawWidth) / 2;
-          y = 0;
-        } else {
-          // Canvas is taller than or same aspect as the image
-          drawWidth = canvas.width;
-          drawHeight = drawWidth / imageAspectRatio;
-          x = 0;
-          y = (canvas.height - drawHeight) / 2;
-        }
+        const { x, y, width: drawWidth, height: drawHeight } = calculateImageDimensions(
+          canvas.width, 
+          canvas.height, 
+          img.width, 
+          img.height
+        );
         
         ctx.drawImage(img, x, y, drawWidth, drawHeight);
         
@@ -174,10 +157,7 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     const data = imageData.data;
     
     // Convert hex color to RGB
-    const hex = toolState.selectedColor.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
+    const { r, g, b } = hexToRgb(toolState.selectedColor);
     
     // Apply the color to each selected pixel
     for (const [x, y] of pixels) {
@@ -289,30 +269,6 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     };
   };
 
-  // Get color at a specific position on the canvas
-  const getColorAtPosition = (x, y) => {
-    if (!imageCanvasRef.current) return null;
-    
-    const canvas = imageCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    // Get pixel data at the clicked position
-    const pixelData = ctx.getImageData(x, y, 1, 1).data;
-    
-    // Convert RGB to hex
-    const r = pixelData[0];
-    const g = pixelData[1];
-    const b = pixelData[2];
-    
-    // Format as hex color
-    const hex = '#' + [r, g, b].map(x => {
-      const hex = x.toString(16);
-      return hex.length === 1 ? '0' + hex : hex;
-    }).join('');
-    
-    return hex;
-  };
-
   // Handle pointer down event (mouse down or touch start)
   const handlePointerDown = (e) => {
     if (!selectedImage) return;
@@ -334,7 +290,10 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
       }, 10);
     } else if (toolState.activeTool === TOOLS.COLOR_PICKER) {
       // Get color at clicked position
-      const color = getColorAtPosition(x, y);
+      if (!imageCanvasRef.current) return;
+      const ctx = imageCanvasRef.current.getContext('2d');
+      const color = getColorAtPosition(ctx, x, y);
+      
       if (color) {
         toolState.setSelectedColor(color);
         // Show a brief visual feedback
@@ -494,19 +453,6 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     }
   }, [selectedImage]);
 
-  // Effect to focus the text input when it becomes visible
-  useEffect(() => {
-    if (textInput.visible) {
-      // We need to wait for the input to be rendered
-      setTimeout(() => {
-        const input = document.getElementById('text-input');
-        if (input) {
-          input.focus();
-        }
-      }, 0);
-    }
-  }, [textInput.visible]);
-
   // Effect to redraw text elements when they change
   useEffect(() => {
     if (selectedImage) {
@@ -551,7 +497,7 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
   };
 
   // Compute position for contextual fill button
-  const fillButtonPosition = (() => {
+  const getFillButtonPosition = () => {
     if (!selectionRect || isSelectingRect || toolState.activeTool !== TOOLS.MARQUEE_SELECT) return null;
     const rectX = selectionRect.width < 0 ? selectionRect.x + selectionRect.width : selectionRect.x;
     const rectY = selectionRect.height < 0 ? selectionRect.y + selectionRect.height : selectionRect.y;
@@ -560,7 +506,7 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     const btnX = rectX + rectW + offset;
     const btnY = Math.max(0, rectY - 40); // 40px above rect
     return { x: btnX, y: btnY };
-  })();
+  };
 
   // Fill the current selection rectangle with the selected color
   function fillSelection() {
@@ -653,105 +599,25 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
         onTouchEnd={handlePointerUp}
       />
 
-      {/* Loading overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-black bg-opacity-70 dark:bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-20">
-          <motion.div 
-            className="p-4 rounded-full bg-white dark:bg-gray-800"
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          >
-            <FaSpinner className="text-primary-500 dark:text-primary-400 text-2xl" />
-          </motion.div>
-        </div>
-      )}
-
-      {/* Text input popup */}
+      {/* Component layers */}
+      <LoadingOverlay isLoading={isLoading} />
+      
       <AnimatePresence>
-        {textInput.visible && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="absolute z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700"
-            style={{
-              left: `${textInput.x}px`,
-              top: `${Math.max(10, textInput.y - 70)}px`, // Position above, with boundary check
-              width: '240px'
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {textInput.editing ? 'Edit Text' : 'Add Text'}
-              </div>
-              <button 
-                onClick={() => setTextInput({ ...textInput, visible: false })}
-                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <input
-              id="text-input"
-              type="text"
-              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-primary-300 dark:focus:ring-primary-700 focus:border-primary-500 dark:focus:border-primary-500 focus:outline-none transition-colors"
-              value={textInput.value}
-              onChange={(e) => setTextInput(prev => ({ ...prev, value: e.target.value }))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleTextSubmit();
-                } else if (e.key === 'Escape') {
-                  setTextInput({ ...textInput, visible: false });
-                }
-              }}
-              placeholder="Enter text..."
-            />
-            <div className="flex justify-between items-center mt-3">
-              {textInput.editing ? (
-                <button
-                  onClick={handleTextDelete}
-                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white rounded-md hover:shadow-sm flex items-center text-sm transition-colors"
-                >
-                  <FaTrash className="mr-1.5" />
-                  Delete
-                </button>
-              ) : (
-                <div /> // Placeholder to keep alignment
-              )}
-              <button
-                onClick={handleTextSubmit}
-                className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white rounded-md hover:shadow-sm flex items-center text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!textInput.value.trim()}
-              >
-                <FaCheck className="mr-1.5" /> 
-                {textInput.editing ? 'Update' : 'Add'}
-              </button>
-            </div>
-          </motion.div>
-        )}
+        <TextInput 
+          textInput={textInput}
+          onTextChange={(value) => setTextInput(prev => ({ ...prev, value }))}
+          onSubmit={handleTextSubmit}
+          onCancel={() => setTextInput(prev => ({ ...prev, visible: false }))}
+          onDelete={handleTextDelete}
+        />
       </AnimatePresence>
 
-      {/* No image placeholder */}
-      {!selectedImage && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-gray-400 dark:text-gray-500">
-            <FaFont className="mx-auto text-5xl mb-3 opacity-30" />
-            <p className="text-lg font-medium">Select or upload a floor plan to edit</p>
-            <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">The canvas will display your selected image</p>
-          </div>
-        </div>
-      )}
-
-      {/* Contextual fill button */}
-      {fillButtonPosition && (
-        <button
-          onClick={fillSelection}
-          className="absolute z-20 p-2 rounded-md bg-primary-500 hover:bg-primary-600 text-white shadow-lg flex items-center justify-center"
-          style={{ left: `${fillButtonPosition.x}px`, top: `${fillButtonPosition.y}px` }}
-        >
-          <FaFillDrip />
-        </button>
-      )}
+      {!selectedImage && <NoImagePlaceholder />}
+      
+      <ContextualFillButton 
+        position={getFillButtonPosition()} 
+        onClick={fillSelection} 
+      />
     </div>
   );
 });

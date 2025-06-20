@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { ThemeProvider } from './components/ThemeToggle'
+import { ToolProvider } from './contexts/ToolContext'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
-      <App />
+      <ToolProvider>
+        <App />
+      </ToolProvider>
     </ThemeProvider>
   </StrictMode>,
 )

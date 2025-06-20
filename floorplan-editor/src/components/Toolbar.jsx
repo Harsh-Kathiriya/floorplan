@@ -3,6 +3,7 @@ import { TOOLS } from '../hooks/useToolState';
 import { HexColorPicker } from 'react-colorful';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, Transition } from '@headlessui/react';
+import { useToolContext } from '../contexts/ToolContext';
 import { 
   FaMagic, 
   FaFont, 
@@ -65,14 +66,18 @@ const TEXT_SIZES = [
   { value: 48, label: 'XL' }
 ];
 
-const Toolbar = ({ 
-  activeTool, setActiveTool, 
-  selectedColor, setSelectedColor,
-  selectedTextSize, setSelectedTextSize,
-  selectedBold, setSelectedBold,
-  saveImage,
-  undo, redo, canUndo, canRedo 
-}) => {
+const Toolbar = ({ saveImage, undo, redo, canUndo, canRedo }) => {
+  const {
+    activeTool,
+    setActiveTool,
+    selectedColor,
+    setSelectedColor,
+    selectedTextSize,
+    setSelectedTextSize,
+    selectedBold,
+    setSelectedBold
+  } = useToolContext();
+
   const btnClass = (isActive) => 
     `p-2.5 rounded-lg ${isActive 
       ? 'bg-primary-500 dark:bg-primary-600 text-white shadow-md' 

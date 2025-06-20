@@ -4,11 +4,12 @@ import { FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaInfoCircle, FaHome } 
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
-import useToolState from './hooks/useToolState';
+import { useToolContext } from './contexts/ToolContext';
 import DeveloperInfo from './components/DeveloperInfo';
 import ThemeToggle, { useTheme } from './components/ThemeToggle';
 import SaveDialog from './components/SaveDialog';
 import DeleteConfirmationDialog from './components/DeleteConfirmationDialog';
+import { createHistoryEntry, addHistoryEntry } from './utils/historyUtils';
 
 function App() {
   // Basic state for images
@@ -18,8 +19,8 @@ function App() {
   // Reference to the canvas component
   const canvasRef = useRef();
   
-  // Tool state for the editor
-  const toolState = useToolState();
+  // Get tool state from context
+  const toolState = useToolContext();
   
   // State for responsive sidebar
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -78,62 +79,22 @@ function App() {
     const imageData = canvasRef.current?.getImageData() || null;
     
     // Create new history entry
-    const newEntry = {
-      textElements: [...toolState.textElements],
+    const newEntry = createHistoryEntry(
+      toolState.textElements,
       imageData,
-      selectedTextSize: toolState.selectedTextSize,
-      selectedBold: toolState.selectedBold
-    };
+      toolState.selectedTextSize,
+      toolState.selectedBold
+    );
     
-    const areEntriesEqual = (a, b) => {
-      if (!a || !b) return false;
-      if (a.selectedTextSize !== b.selectedTextSize) return false;
-      if (a.selectedBold !== b.selectedBold) return false;
-      // Compare textElements
-      if (a.textElements.length !== b.textElements.length) return false;
-      for (let i = 0; i < a.textElements.length; i++) {
-        if (JSON.stringify(a.textElements[i]) !== JSON.stringify(b.textElements[i])) {
-          return false;
-        }
-      }
-      // Compare imageData dimensions
-      if (a.imageData && b.imageData) {
-        if (a.imageData.width !== b.imageData.width || a.imageData.height !== b.imageData.height) {
-          return false;
-        }
-        // Sample pixels more densely to catch small area changes
-        const dataA = a.imageData.data;
-        const dataB = b.imageData.data;
-        const len = dataA.length;
-        for (let idx = 0; idx < len; idx += 400) { // every 100 pixels (4 bytes each)
-          if (dataA[idx] !== dataB[idx]) return false;
-        }
-      } else if (a.imageData || b.imageData) {
-        // One has imageData, other null
-        return false;
-      }
-      return true;
-    };
-
     setEditHistory(prev => {
       const imageHistory = prev[imageId] || { history: [], currentIndex: -1 };
-      const { history, currentIndex } = imageHistory;
       
-      const lastEntry = history[currentIndex];
-      if (areEntriesEqual(lastEntry, newEntry)) {
-        // No actual changes, skip recording
-        return prev;
-      }
-
-      // Remove any future history that would be lost by this new edit
-      const newHistory = history.slice(0, currentIndex + 1);
+      // Add entry to history
+      const updatedHistory = addHistoryEntry(imageHistory, newEntry);
       
       return {
         ...prev,
-        [imageId]: {
-          history: [...newHistory, newEntry],
-          currentIndex: newHistory.length
-        }
+        [imageId]: updatedHistory
       };
     });
   };
@@ -509,14 +470,6 @@ function App() {
 
         <main className="flex-grow flex flex-col">
           <Toolbar 
-            activeTool={toolState.activeTool}
-            setActiveTool={toolState.setActiveTool}
-            selectedColor={toolState.selectedColor}
-            setSelectedColor={toolState.setSelectedColor}
-            selectedTextSize={toolState.selectedTextSize}
-            setSelectedTextSize={toolState.setSelectedTextSize}
-            selectedBold={toolState.selectedBold}
-            setSelectedBold={toolState.setSelectedBold}
             saveImage={saveImage}
             undo={handleUndo}
             redo={handleRedo}
@@ -527,7 +480,6 @@ function App() {
             ref={canvasRef}
             selectedImage={selectedImage} 
             historyImageData={currentHistoryEntry?.imageData || null}
-            toolState={toolState}
             onEditComplete={recordEdit}
             onInitialDraw={handleInitialDraw}
           />
