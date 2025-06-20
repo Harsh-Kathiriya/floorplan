@@ -1,9 +1,9 @@
 import React from 'react';
-import { FaTimes, FaImage, FaUpload, FaPlus } from 'react-icons/fa';
+import { FaTimes, FaImage, FaUpload, FaPlus, FaTrash } from 'react-icons/fa';
 import { MdOutlineImageNotSupported } from 'react-icons/md';
 import { motion } from 'framer-motion';
 
-const Sidebar = ({ images, onImageUpload, onImageSelect, selectedImageIndex, onClose }) => {
+const Sidebar = ({ images, onImageUpload, onImageSelect, selectedImageIndex, onClose, onDeleteImage }) => {
   return (
     <aside className="w-[280px] md:w-72 h-full bg-white dark:bg-dark-sidebar shadow-lg border-r border-gray-200 dark:border-dark-border flex flex-col transition-colors duration-300">
       <div className="p-4 border-b border-gray-200 dark:border-dark-border flex items-center justify-between">
@@ -52,11 +52,11 @@ const Sidebar = ({ images, onImageUpload, onImageSelect, selectedImageIndex, onC
           <ul className="space-y-2.5">
             {images.map((image, index) => (
               <motion.li 
-                key={index}
+                key={image.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: index * 0.05 }}
-                className={`rounded-lg overflow-hidden cursor-pointer transition-all duration-200 border ${
+                className={`group rounded-lg overflow-hidden cursor-pointer transition-all duration-200 border ${
                   selectedImageIndex === index 
                     ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 shadow-sm' 
                     : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
@@ -92,6 +92,17 @@ const Sidebar = ({ images, onImageUpload, onImageSelect, selectedImageIndex, onC
                       )}
                     </div>
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent selecting the image
+                      onDeleteImage(index);
+                    }}
+                    className="ml-2 p-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-all duration-150"
+                    aria-label={`Delete ${image.name}`}
+                    title="Delete image"
+                  >
+                    <FaTrash />
+                  </button>
                 </div>
               </motion.li>
             ))}

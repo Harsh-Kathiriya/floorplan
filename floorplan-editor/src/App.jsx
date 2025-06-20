@@ -7,6 +7,7 @@ import Canvas from './components/Canvas';
 import useToolState from './hooks/useToolState';
 import DeveloperInfo from './components/DeveloperInfo';
 import ThemeToggle, { useTheme } from './components/ThemeToggle';
+import SaveDialog from './components/SaveDialog';
 
 function App() {
   // Basic state for images
@@ -30,6 +31,7 @@ function App() {
   // - selections: array of selections
   const [editHistory, setEditHistory] = useState({});
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   
   // Get theme context
   const { theme } = useTheme();
@@ -196,6 +198,47 @@ function App() {
     });
   };
   
+  // Handle deleting an image from the sidebar
+  const handleImageDelete = (indexToDelete) => {
+    if (!images[indexToDelete]) return;
+
+    const imageToDelete = images[indexToDelete];
+    // Use a simple confirmation dialog
+    if (!window.confirm(`Are you sure you want to delete "${imageToDelete.name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    const imageIdToDelete = imageToDelete.id;
+
+    // Filter out the deleted image
+    const newImages = images.filter((_, index) => index !== indexToDelete);
+    
+    // Remove the history for the deleted image
+    const newEditHistory = { ...editHistory };
+    delete newEditHistory[imageIdToDelete];
+
+    // Update state
+    setImages(newImages);
+    setEditHistory(newEditHistory);
+
+    // Adjust the selected image index after deletion
+    if (selectedImageIndex === indexToDelete) {
+      // If the active image was deleted, select a new one
+      if (newImages.length === 0) {
+        setSelectedImageIndex(null); // No images left
+      } else if (indexToDelete >= newImages.length) {
+        // If the last image was deleted, select the new last one
+        setSelectedImageIndex(newImages.length - 1);
+      } else {
+        // An image in the middle was deleted, select the one now at the same index
+        handleImageSelect(indexToDelete);
+      }
+    } else if (selectedImageIndex > indexToDelete) {
+      // If an image before the active one was deleted, decrement the index
+      setSelectedImageIndex(prevIndex => prevIndex - 1);
+    }
+  };
+  
   // Handle image upload
   const handleImageUpload = (event) => {
     const files = Array.from(event.target.files);
@@ -299,32 +342,32 @@ function App() {
   const saveImage = () => {
     if (canvasRef.current) {
       canvasRef.current.saveImage();
+      // Show confirmation dialog
+      setIsSaveDialogOpen(true);
     }
   };
   
   // Set up keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.metaKey || e.ctrlKey) {
-        if (e.key === 'z') {
-          e.preventDefault();
-          if (e.shiftKey) {
-            handleRedo();
-          } else {
-            handleUndo();
-          }
-        } else if (e.key === 'y') {
-          e.preventDefault();
-          handleRedo();
-        }
+      // Use 'metaKey' for Command on Mac, and 'ctrlKey' for Control on other OS
+      const isModifier = e.metaKey || e.ctrlKey;
+
+      if (isModifier && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if (isModifier && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [handleUndo, handleRedo]);
 
   // Check window size to set initial sidebar state
   useEffect(() => {
@@ -387,19 +430,24 @@ function App() {
                   Floor Plan Editor
                 </h1>
               </div>
-              <div className="flex items-center space-x-4">
-                <button 
-                  onClick={() => setIsInfoModalOpen(true)}
-                  className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-                  title="About the developer"
-                >
-                  <span className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm transition-all duration-150">About Me</span>
-                </button>
-                <ThemeToggle />
+            </div>
+            
+            <div className="flex-grow flex justify-center items-center px-4">
+              <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs text-center">
+                {selectedImage ? `Editing: ${selectedImage.name}` : 'No image selected'}
               </div>
             </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
-              {selectedImage && `Editing: ${selectedImage.name}`}
+
+            {/* Right section */}
+            <div className="flex items-center space-x-4">
+               <ThemeToggle />
+               <button
+                 onClick={() => setIsInfoModalOpen(true)}
+                 className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm transition-all duration-150"
+                 title="About the developer"
+               >
+                 About Me
+               </button>
             </div>
           </div>
         </div>
@@ -423,6 +471,7 @@ function App() {
                 onImageSelect={handleImageSelect}
                 selectedImageIndex={selectedImageIndex}
                 onClose={() => setIsSidebarOpen(false)}
+                onDeleteImage={handleImageDelete}
               />
             </motion.div>
           )}
@@ -499,9 +548,13 @@ function App() {
         {isInfoModalOpen && (
           <DeveloperInfo onClose={() => setIsInfoModalOpen(false)} />
         )}
+        {isSaveDialogOpen && (
+          <SaveDialog onClose={() => setIsSaveDialogOpen(false)} />
+        )}
       </AnimatePresence>
     </div>
   );
 }
 
 export default App;
+

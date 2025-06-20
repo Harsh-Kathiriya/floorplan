@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } f
 import { motion, AnimatePresence } from 'framer-motion';
 import useFloodFill from '../hooks/useFloodFill';
 import { TOOLS } from '../hooks/useToolState';
-import { FaSpinner, FaFont, FaCheck, FaTimes } from 'react-icons/fa';
+import { FaSpinner, FaFont, FaCheck, FaTimes, FaTrash } from 'react-icons/fa';
 
 const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditComplete, onInitialDraw }, ref) => {
   const containerRef = useRef(null);
@@ -251,6 +251,20 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
 
     // Redraw the text canvas to show the new text
     drawTextElements();
+    
+    // Notify that an edit was completed
+    if (onEditComplete) onEditComplete();
+  };
+
+  // Handle deleting a text element
+  const handleTextDelete = () => {
+    if (!textInput.editing || !textInput.editingId) return;
+
+    // Use the delete function from the tool state hook
+    toolState.deleteTextElement(textInput.editingId);
+
+    // Hide the input popup
+    setTextInput({ visible: false, value: '', editing: false, editingId: null });
     
     // Notify that an edit was completed
     if (onEditComplete) onEditComplete();
@@ -553,8 +567,8 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
             className="absolute z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700"
             style={{
               left: `${textInput.x}px`,
-              top: `${textInput.y - 60}px`,
-              width: '220px'
+              top: `${Math.max(10, textInput.y - 70)}px`, // Position above, with boundary check
+              width: '240px'
             }}
           >
             <div className="flex items-center justify-between mb-2">
@@ -577,17 +591,30 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   handleTextSubmit();
+                } else if (e.key === 'Escape') {
+                  setTextInput({ ...textInput, visible: false });
                 }
               }}
               placeholder="Enter text..."
             />
-            <div className="flex justify-end mt-2">
+            <div className="flex justify-between items-center mt-3">
+              {textInput.editing ? (
+                <button
+                  onClick={handleTextDelete}
+                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white rounded-md hover:shadow-sm flex items-center text-sm transition-colors"
+                >
+                  <FaTrash className="mr-1.5" />
+                  Delete
+                </button>
+              ) : (
+                <div /> // Placeholder to keep alignment
+              )}
               <button
                 onClick={handleTextSubmit}
-                className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white rounded-md hover:shadow-sm flex items-center text-sm transition-colors"
+                className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white rounded-md hover:shadow-sm flex items-center text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!textInput.value.trim()}
               >
-                <FaCheck className="mr-1" /> 
+                <FaCheck className="mr-1.5" /> 
                 {textInput.editing ? 'Update' : 'Add'}
               </button>
             </div>
@@ -605,13 +632,6 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
           </div>
         </div>
       )}
-
-      {/* Tool hint overlay - show based on active tool */}
-      {selectedImage && !textInput.visible && !isLoading && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-black bg-opacity-70 dark:bg-opacity-90 text-white text-sm rounded-full z-10 pointer-events-none">
-            
-          </div>
-        )}
     </div>
   );
 });
