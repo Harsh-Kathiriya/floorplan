@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } f
 import { motion, AnimatePresence } from 'framer-motion';
 import useFloodFill from '../hooks/useFloodFill';
 import { TOOLS } from '../hooks/useToolState';
-import { FaSpinner, FaFont, FaCheck, FaTimes, FaTrash } from 'react-icons/fa';
+import { FaSpinner, FaFont, FaCheck, FaTimes, FaTrash, FaFillDrip } from 'react-icons/fa';
 
 const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditComplete, onInitialDraw }, ref) => {
   const containerRef = useRef(null);
@@ -31,6 +31,10 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     offsetY: 0
   });
 
+  // State for marquee selection rectangle
+  const [selectionRect, setSelectionRect] = useState(null); // { x, y, width, height }
+  const [isSelectingRect, setIsSelectingRect] = useState(false);
+
   // Expose functions through the ref
   useImperativeHandle(ref, () => ({
     saveImage: () => {
@@ -47,6 +51,9 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     },
     resetToOriginalImage: () => {
       resetToOriginalImage();
+    },
+    fillSelection: () => {
+      fillSelection();
     }
   }));
 
@@ -334,6 +341,10 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
         setIsLoading(true);
         setTimeout(() => setIsLoading(false), 300);
       }
+    } else if (toolState.activeTool === TOOLS.MARQUEE_SELECT) {
+      // Start a new selection rectangle
+      setSelectionRect({ x, y, width: 0, height: 0 });
+      setIsSelectingRect(true);
     } else if (toolState.activeTool === TOOLS.TEXT) {
       // Check if the click is near an existing text element
       const clickedTextElement = findTextElementAtPosition(x, y);
@@ -377,10 +388,17 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
   
   // Handle pointer move for dragging text
   const handlePointerMove = (e) => {
-    if (!dragState.isDragging || toolState.activeTool !== TOOLS.POINTER) return;
-    
     const { x, y } = getPointerPosition(e);
-    
+
+    if (toolState.activeTool === TOOLS.MARQUEE_SELECT && isSelectingRect) {
+      // Update selection rectangle dimensions
+      setSelectionRect(prev => prev ? { ...prev, width: x - prev.x, height: y - prev.y } : prev);
+      drawSelectionVisualization();
+      return;
+    }
+
+    if (!dragState.isDragging || toolState.activeTool !== TOOLS.POINTER) return;
+
     // Update text position
     const newX = x + dragState.offsetX;
     const newY = y + dragState.offsetY;
@@ -393,6 +411,11 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
   
   // Handle pointer up to end dragging
   const handlePointerUp = () => {
+    if (isSelectingRect && toolState.activeTool === TOOLS.MARQUEE_SELECT) {
+      setIsSelectingRect(false);
+      drawSelectionVisualization(); // Ensure final rectangle drawn
+      return;
+    }
     if (dragState.isDragging) {
       setDragState({
         isDragging: false,
@@ -498,6 +521,19 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     }
   }, [historyImageData]);
 
+  // Redraw selection visualization whenever the selection rectangle changes
+  useEffect(() => {
+    drawSelectionVisualization();
+  }, [selectionRect]);
+
+  // Clear selection when switching away from marquee select tool
+  useEffect(() => {
+    if (toolState.activeTool !== TOOLS.MARQUEE_SELECT) {
+      setSelectionRect(null);
+      clearSelectionVisualization();
+    }
+  }, [toolState.activeTool]);
+
   // Determine cursor style based on active tool
   const getCursorStyle = () => {
     switch (toolState.activeTool) {
@@ -507,9 +543,82 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
         return 'text';
       case TOOLS.COLOR_PICKER:
         return 'copy';
+      case TOOLS.MARQUEE_SELECT:
+        return 'crosshair';
       default:
         return 'default';
     }
+  };
+
+  // Compute position for contextual fill button
+  const fillButtonPosition = (() => {
+    if (!selectionRect || isSelectingRect || toolState.activeTool !== TOOLS.MARQUEE_SELECT) return null;
+    const rectX = selectionRect.width < 0 ? selectionRect.x + selectionRect.width : selectionRect.x;
+    const rectY = selectionRect.height < 0 ? selectionRect.y + selectionRect.height : selectionRect.y;
+    const rectW = Math.abs(selectionRect.width);
+    const offset = 8;
+    const btnX = rectX + rectW + offset;
+    const btnY = Math.max(0, rectY - 40); // 40px above rect
+    return { x: btnX, y: btnY };
+  })();
+
+  // Fill the current selection rectangle with the selected color
+  function fillSelection() {
+    if (!selectionRect || !imageCanvasRef.current) return;
+
+    const canvas = imageCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    // Determine normalized rectangle (handle negative width/height)
+    const rectX = selectionRect.width < 0 ? selectionRect.x + selectionRect.width : selectionRect.x;
+    const rectY = selectionRect.height < 0 ? selectionRect.y + selectionRect.height : selectionRect.y;
+    const rectW = Math.abs(selectionRect.width);
+    const rectH = Math.abs(selectionRect.height);
+
+    // Clamp to canvas bounds
+    const x = Math.max(0, rectX);
+    const y = Math.max(0, rectY);
+    const w = Math.min(rectW, canvas.width - x);
+    const h = Math.min(rectH, canvas.height - y);
+
+    if (w === 0 || h === 0) return;
+
+    ctx.fillStyle = toolState.selectedColor;
+    ctx.fillRect(x, y, w, h);
+
+    // Clear the selection visualization
+    clearSelectionVisualization();
+    setSelectionRect(null);
+
+    // Notify that an edit was completed
+    if (onEditComplete) onEditComplete();
+  }
+
+  // Clear selection rectangle drawing from the selection canvas
+  const clearSelectionVisualization = () => {
+    if (!selectionCanvasRef.current) return;
+    const sctx = selectionCanvasRef.current.getContext('2d');
+    sctx.clearRect(0, 0, selectionCanvasRef.current.width, selectionCanvasRef.current.height);
+  };
+
+  // Draw selection rectangle visualization
+  const drawSelectionVisualization = () => {
+    if (!selectionCanvasRef.current) return;
+    const sctx = selectionCanvasRef.current.getContext('2d');
+    sctx.clearRect(0, 0, selectionCanvasRef.current.width, selectionCanvasRef.current.height);
+
+    if (!selectionRect) return;
+
+    sctx.setLineDash([6]);
+    sctx.lineWidth = 1;
+    sctx.strokeStyle = 'rgba(59,130,246,0.9)'; // blue-ish
+
+    const rectX = selectionRect.width < 0 ? selectionRect.x + selectionRect.width : selectionRect.x;
+    const rectY = selectionRect.height < 0 ? selectionRect.y + selectionRect.height : selectionRect.y;
+    const rectW = Math.abs(selectionRect.width);
+    const rectH = Math.abs(selectionRect.height);
+
+    sctx.strokeRect(rectX, rectY, rectW, rectH);
   };
 
   return (
@@ -533,7 +642,7 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
         className={`absolute top-0 left-0 ${getCursorStyle()}`}
         style={{ 
           zIndex: 3,
-          pointerEvents: toolState.activeTool === TOOLS.MAGIC_BRUSH || toolState.activeTool === TOOLS.POINTER || toolState.activeTool === TOOLS.TEXT || toolState.activeTool === TOOLS.COLOR_PICKER ? 'auto' : 'none'
+          pointerEvents: [TOOLS.MAGIC_BRUSH, TOOLS.POINTER, TOOLS.TEXT, TOOLS.COLOR_PICKER, TOOLS.MARQUEE_SELECT].includes(toolState.activeTool) ? 'auto' : 'none'
         }}
         onMouseDown={handlePointerDown}
         onMouseMove={handlePointerMove}
@@ -631,6 +740,17 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
             <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">The canvas will display your selected image</p>
           </div>
         </div>
+      )}
+
+      {/* Contextual fill button */}
+      {fillButtonPosition && (
+        <button
+          onClick={fillSelection}
+          className="absolute z-20 p-2 rounded-md bg-primary-500 hover:bg-primary-600 text-white shadow-lg flex items-center justify-center"
+          style={{ left: `${fillButtonPosition.x}px`, top: `${fillButtonPosition.y}px` }}
+        >
+          <FaFillDrip />
+        </button>
       )}
     </div>
   );

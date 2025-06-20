@@ -99,11 +99,11 @@ function App() {
         if (a.imageData.width !== b.imageData.width || a.imageData.height !== b.imageData.height) {
           return false;
         }
-        // Sample pixels every 1000th byte to avoid heavy compare
+        // Sample pixels more densely to catch small area changes
         const dataA = a.imageData.data;
         const dataB = b.imageData.data;
         const len = dataA.length;
-        for (let idx = 0; idx < len; idx += 4000) { // every 1000 pixels (4 bytes each)
+        for (let idx = 0; idx < len; idx += 400) { // every 100 pixels (4 bytes each)
           if (dataA[idx] !== dataB[idx]) return false;
         }
       } else if (a.imageData || b.imageData) {

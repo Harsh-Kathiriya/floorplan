@@ -6,6 +6,7 @@ export const TOOLS = {
   MAGIC_BRUSH: 'magic_brush',
   TEXT: 'text',
   COLOR_PICKER: 'color_picker',
+  MARQUEE_SELECT: 'marquee_select',
 };
 
 /**

@@ -16,7 +16,8 @@ import {
   FaCheck,
   FaAngleLeft,
   FaAngleRight,
-  FaEyeDropper
+  FaEyeDropper,
+  FaBorderStyle
 } from 'react-icons/fa';
 import Tooltip from './Tooltip';
 
@@ -49,6 +50,10 @@ const TOOL_TIPS = {
     title: 'Color Picker',
     description: 'Select a color from the canvas.',
   },
+  [TOOLS.MARQUEE_SELECT]: {
+    title: 'Marquee Select',
+    description: 'Drag to create a rectangular selection.',
+  },
 };
 
 // Text sizes with better labeling
@@ -65,7 +70,7 @@ const Toolbar = ({
   selectedColor, setSelectedColor,
   selectedTextSize, setSelectedTextSize,
   selectedBold, setSelectedBold,
-  saveImage, 
+  saveImage,
   undo, redo, canUndo, canRedo 
 }) => {
   const btnClass = (isActive) => 
@@ -116,6 +121,14 @@ const Toolbar = ({
                   onClick={() => setActiveTool(TOOLS.COLOR_PICKER)}
                 >
                   <FaEyeDropper className="text-lg" />
+                </button>
+              </Tooltip>
+              <Tooltip {...TOOL_TIPS[TOOLS.MARQUEE_SELECT]}>
+                <button 
+                  className={btnClass(activeTool === TOOLS.MARQUEE_SELECT)}
+                  onClick={() => setActiveTool(TOOLS.MARQUEE_SELECT)}
+                >
+                  <FaBorderStyle className="text-lg" />
                 </button>
               </Tooltip>
             </div>
