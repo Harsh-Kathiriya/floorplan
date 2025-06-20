@@ -8,6 +8,7 @@ import useToolState from './hooks/useToolState';
 import DeveloperInfo from './components/DeveloperInfo';
 import ThemeToggle, { useTheme } from './components/ThemeToggle';
 import SaveDialog from './components/SaveDialog';
+import DeleteConfirmationDialog from './components/DeleteConfirmationDialog';
 
 function App() {
   // Basic state for images
@@ -32,6 +33,7 @@ function App() {
   const [editHistory, setEditHistory] = useState({});
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [imageToDelete, setImageToDelete] = useState(null); // Stores { name, index }
   
   // Get theme context
   const { theme } = useTheme();
@@ -201,14 +203,18 @@ function App() {
   // Handle deleting an image from the sidebar
   const handleImageDelete = (indexToDelete) => {
     if (!images[indexToDelete]) return;
+    setImageToDelete({
+      name: images[indexToDelete].name,
+      index: indexToDelete
+    });
+  };
+  
+  // Actually perform the deletion after confirmation
+  const executeImageDelete = () => {
+    if (imageToDelete === null) return;
 
-    const imageToDelete = images[indexToDelete];
-    // Use a simple confirmation dialog
-    if (!window.confirm(`Are you sure you want to delete "${imageToDelete.name}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    const imageIdToDelete = imageToDelete.id;
+    const { index: indexToDelete } = imageToDelete;
+    const imageIdToDelete = images[indexToDelete].id;
 
     // Filter out the deleted image
     const newImages = images.filter((_, index) => index !== indexToDelete);
@@ -237,6 +243,9 @@ function App() {
       // If an image before the active one was deleted, decrement the index
       setSelectedImageIndex(prevIndex => prevIndex - 1);
     }
+    
+    // Close the confirmation dialog
+    setImageToDelete(null);
   };
   
   // Handle image upload
@@ -550,6 +559,13 @@ function App() {
         )}
         {isSaveDialogOpen && (
           <SaveDialog onClose={() => setIsSaveDialogOpen(false)} />
+        )}
+        {imageToDelete !== null && (
+          <DeleteConfirmationDialog 
+            imageName={imageToDelete.name}
+            onClose={() => setImageToDelete(null)}
+            onConfirm={executeImageDelete}
+          />
         )}
       </AnimatePresence>
     </div>

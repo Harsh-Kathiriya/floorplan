@@ -38,7 +38,7 @@ const SaveDialog = ({ onClose }) => {
           </div>
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Image Downloaded!</h2>
           <p className="text-gray-600 dark:text-gray-300 text-sm">
-            Your floor plan has been successfully downloaded. This editor was created by <span className="font-semibold">Harsh Kathiriya</span>.
+            Your floor plan has been successfully downloaded. This editor was created by <span className="font-semibold">Harsh Kathiriya, a student at the University of Alabama</span>.
           </p>
 
           {/* Developer Photo */}

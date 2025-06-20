@@ -63,7 +63,10 @@ const DeveloperInfo = ({ onClose }) => {
               How I Can Help
             </h4>
             <p className="text-gray-600 dark:text-gray-300 mb-6 text-sm">
-              I'm available to be hired as a student worker. If you or your department need assistance with technology projects, I'd love to help. My areas of expertise include:
+              I'm available as a <b>student worker</b> who can help build innovative web tools and AI automations to enhance your workflow. 
+              <br />
+              <br />
+              By combining the latest technologies with practical solutions, I can help streamline your processes and bring fresh ideas to your projects. Let's work together to make your vision a reality.
             </p>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
