@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import useFloodFill from '../hooks/useFloodFill';
 import { TOOLS } from '../hooks/useToolState';
+import { FaSpinner, FaFont, FaCheck, FaTimes } from 'react-icons/fa';
 
 const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditComplete, onInitialDraw }, ref) => {
   const containerRef = useRef(null);
@@ -8,6 +10,7 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
   const textCanvasRef = useRef(null);
   const selectionCanvasRef = useRef(null);
   const [canvasScale, setCanvasScale] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [isLoading, setIsLoading] = useState(false);
   const { floodFill } = useFloodFill();
   
   // State for the text input
@@ -74,10 +77,13 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
 
   const drawImage = (isInitialDraw = true) => {
     const canvas = imageCanvasRef.current;
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (selectedImage) {
+      setIsLoading(true);
       const img = new Image();
       img.onload = () => {
         const canvasAspectRatio = canvas.width / canvas.height;
@@ -118,7 +124,15 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
         if (isInitialDraw && onInitialDraw) {
           onInitialDraw(ctx.getImageData(0, 0, canvas.width, canvas.height));
         }
+        
+        setIsLoading(false);
       };
+      
+      img.onerror = () => {
+        setIsLoading(false);
+        // Could add an error state here
+      };
+      
       img.src = selectedImage.dataUrl;
     }
   };
@@ -242,19 +256,69 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     if (onEditComplete) onEditComplete();
   };
 
-  // Handle mouse down event
-  const handleMouseDown = (e) => {
+  // Get pointer position (works for both mouse and touch)
+  const getPointerPosition = (e) => {
+    const rect = selectionCanvasRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    return {
+      x: Math.floor(clientX - rect.left),
+      y: Math.floor(clientY - rect.top)
+    };
+  };
+
+  // Get color at a specific position on the canvas
+  const getColorAtPosition = (x, y) => {
+    if (!imageCanvasRef.current) return null;
+    
+    const canvas = imageCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    // Get pixel data at the clicked position
+    const pixelData = ctx.getImageData(x, y, 1, 1).data;
+    
+    // Convert RGB to hex
+    const r = pixelData[0];
+    const g = pixelData[1];
+    const b = pixelData[2];
+    
+    // Format as hex color
+    const hex = '#' + [r, g, b].map(x => {
+      const hex = x.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+    
+    return hex;
+  };
+
+  // Handle pointer down event (mouse down or touch start)
+  const handlePointerDown = (e) => {
     if (!selectedImage) return;
     
-    const rect = selectionCanvasRef.current.getBoundingClientRect();
-    const x = Math.floor(e.clientX - rect.left);
-    const y = Math.floor(e.clientY - rect.top);
+    const { x, y } = getPointerPosition(e);
     
     if (toolState.activeTool === TOOLS.MAGIC_BRUSH) {
-      // Perform flood fill and apply color immediately
-      const pixels = floodFill(imageCanvasRef.current, x, y, 5); // 5 is the color tolerance
-      if (pixels.length > 0) {
-        applyColorToPixels(pixels);
+      // Show loading indicator during processing
+      setIsLoading(true);
+      
+      // Use setTimeout to allow the loading indicator to render
+      setTimeout(() => {
+        // Perform flood fill and apply color immediately
+        const pixels = floodFill(imageCanvasRef.current, x, y, 5); // 5 is the color tolerance
+        if (pixels.length > 0) {
+          applyColorToPixels(pixels);
+        }
+        setIsLoading(false);
+      }, 10);
+    } else if (toolState.activeTool === TOOLS.COLOR_PICKER) {
+      // Get color at clicked position
+      const color = getColorAtPosition(x, y);
+      if (color) {
+        toolState.setSelectedColor(color);
+        // Show a brief visual feedback
+        setIsLoading(true);
+        setTimeout(() => setIsLoading(false), 300);
       }
     } else if (toolState.activeTool === TOOLS.TEXT) {
       // Check if the click is near an existing text element
@@ -297,13 +361,11 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     }
   };
   
-  // Handle mouse move for dragging text
-  const handleMouseMove = (e) => {
+  // Handle pointer move for dragging text
+  const handlePointerMove = (e) => {
     if (!dragState.isDragging || toolState.activeTool !== TOOLS.POINTER) return;
     
-    const rect = selectionCanvasRef.current.getBoundingClientRect();
-    const x = Math.floor(e.clientX - rect.left);
-    const y = Math.floor(e.clientY - rect.top);
+    const { x, y } = getPointerPosition(e);
     
     // Update text position
     const newX = x + dragState.offsetX;
@@ -315,8 +377,8 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     drawTextElements();
   };
   
-  // Handle mouse up to end dragging
-  const handleMouseUp = () => {
+  // Handle pointer up to end dragging
+  const handlePointerUp = () => {
     if (dragState.isDragging) {
       setDragState({
         isDragging: false,
@@ -333,6 +395,8 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
   // Save the image as a download
   const saveImage = () => {
     if (!imageCanvasRef.current || !textCanvasRef.current) return;
+    
+    setIsLoading(true);
     
     // Create a temporary canvas to combine image and text
     const tempCanvas = document.createElement('canvas');
@@ -352,7 +416,12 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     const link = document.createElement('a');
     link.download = 'floor-plan-edited.png';
     link.href = tempCanvas.toDataURL('image/png');
-    link.click();
+    
+    // Small delay to ensure UI updates
+    setTimeout(() => {
+      setIsLoading(false);
+      link.click();
+    }, 100);
   };
 
   // We'll use a ResizeObserver to keep the canvases' dimensions in sync with their container.
@@ -415,8 +484,26 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
     }
   }, [historyImageData]);
 
+  // Determine cursor style based on active tool
+  const getCursorStyle = () => {
+    switch (toolState.activeTool) {
+      case TOOLS.MAGIC_BRUSH:
+        return 'crosshair';
+      case TOOLS.TEXT:
+        return 'text';
+      case TOOLS.COLOR_PICKER:
+        return 'copy';
+      default:
+        return 'default';
+    }
+  };
+
   return (
-    <div ref={containerRef} className="flex-grow bg-gray-700 relative overflow-hidden">
+    <div
+      ref={containerRef}
+      className="flex-grow relative overflow-hidden transition-colors duration-300 bg-light-canvas-bg dark:bg-dark-canvas-bg bg-cover bg-center"
+    >
+      {/* Canvas layers */}
       <canvas
         ref={imageCanvasRef}
         className="absolute top-0 left-0"
@@ -429,42 +516,102 @@ const Canvas = forwardRef(({ selectedImage, historyImageData, toolState, onEditC
       />
       <canvas
         ref={selectionCanvasRef}
-        className="absolute top-0 left-0"
+        className={`absolute top-0 left-0 ${getCursorStyle()}`}
         style={{ 
-          zIndex: 3, 
-          cursor: toolState.activeTool === TOOLS.POINTER ? 'move' :
-                  toolState.activeTool === TOOLS.MAGIC_BRUSH ? 'crosshair' : 
-                  toolState.activeTool === TOOLS.TEXT ? 'text' : 'default',
-          pointerEvents: toolState.activeTool === TOOLS.MAGIC_BRUSH || toolState.activeTool === TOOLS.POINTER || toolState.activeTool === TOOLS.TEXT ? 'auto' : 'none'
+          zIndex: 3,
+          pointerEvents: toolState.activeTool === TOOLS.MAGIC_BRUSH || toolState.activeTool === TOOLS.POINTER || toolState.activeTool === TOOLS.TEXT || toolState.activeTool === TOOLS.COLOR_PICKER ? 'auto' : 'none'
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseDown={handlePointerDown}
+        onMouseMove={handlePointerMove}
+        onMouseUp={handlePointerUp}
+        onMouseLeave={handlePointerUp}
+        onTouchStart={handlePointerDown}
+        onTouchMove={handlePointerMove}
+        onTouchEnd={handlePointerUp}
       />
-      {textInput.visible && (
-        <input
-          id="text-input"
-          type="text"
-          className="absolute bg-white border border-gray-300 p-1"
-          style={{
-            left: `${textInput.x}px`,
-            top: `${textInput.y - 20}px`,
-            zIndex: 4,
-            minWidth: '100px'
-          }}
-          value={textInput.value}
-          onChange={(e) => setTextInput(prev => ({ ...prev, value: e.target.value }))}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleTextSubmit();
-            } else if (e.key === 'Escape') {
-              setTextInput(prev => ({ ...prev, visible: false }));
-            }
-          }}
-          onBlur={handleTextSubmit}
-        />
+
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 bg-black bg-opacity-70 dark:bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-20">
+          <motion.div 
+            className="p-4 rounded-full bg-white dark:bg-gray-800"
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+          >
+            <FaSpinner className="text-primary-500 dark:text-primary-400 text-2xl" />
+          </motion.div>
+        </div>
       )}
+
+      {/* Text input popup */}
+      <AnimatePresence>
+        {textInput.visible && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="absolute z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700"
+            style={{
+              left: `${textInput.x}px`,
+              top: `${textInput.y - 60}px`,
+              width: '220px'
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {textInput.editing ? 'Edit Text' : 'Add Text'}
+              </div>
+              <button 
+                onClick={() => setTextInput({ ...textInput, visible: false })}
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <input
+              id="text-input"
+              type="text"
+              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-primary-300 dark:focus:ring-primary-700 focus:border-primary-500 dark:focus:border-primary-500 focus:outline-none transition-colors"
+              value={textInput.value}
+              onChange={(e) => setTextInput(prev => ({ ...prev, value: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleTextSubmit();
+                }
+              }}
+              placeholder="Enter text..."
+            />
+            <div className="flex justify-end mt-2">
+              <button
+                onClick={handleTextSubmit}
+                className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white rounded-md hover:shadow-sm flex items-center text-sm transition-colors"
+                disabled={!textInput.value.trim()}
+              >
+                <FaCheck className="mr-1" /> 
+                {textInput.editing ? 'Update' : 'Add'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* No image placeholder */}
+      {!selectedImage && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center text-gray-400 dark:text-gray-500">
+            <FaFont className="mx-auto text-5xl mb-3 opacity-30" />
+            <p className="text-lg font-medium">Select or upload a floor plan to edit</p>
+            <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">The canvas will display your selected image</p>
+          </div>
+        </div>
+      )}
+
+      {/* Tool hint overlay - show based on active tool */}
+      {selectedImage && !textInput.visible && !isLoading && (
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-black bg-opacity-70 dark:bg-opacity-90 text-white text-sm rounded-full z-10 pointer-events-none">
+            
+          </div>
+        )}
     </div>
   );
 });

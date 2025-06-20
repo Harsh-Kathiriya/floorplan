@@ -1,8 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaInfoCircle, FaHome } from 'react-icons/fa';
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
 import useToolState from './hooks/useToolState';
+import DeveloperInfo from './components/DeveloperInfo';
+import ThemeToggle, { useTheme } from './components/ThemeToggle';
 
 function App() {
   // Basic state for images
@@ -15,6 +19,9 @@ function App() {
   // Tool state for the editor
   const toolState = useToolState();
   
+  // State for responsive sidebar
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
   // Enhanced edit history state - stores ALL state for each image
   // Format: { [imageId]: { history: [], currentIndex: 0 } }
   // where history is an array of states, each containing:
@@ -22,6 +29,10 @@ function App() {
   // - imageData: canvas image data (or null for initial state)
   // - selections: array of selections
   const [editHistory, setEditHistory] = useState({});
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  
+  // Get theme context
+  const { theme } = useTheme();
   
   // Helper to get the current image ID
   const getCurrentImageId = () => {
@@ -248,6 +259,11 @@ function App() {
         const currentEntry = imageHistory.history[imageHistory.currentIndex];
         applyHistoryEntry(currentEntry); // Will update text and other states; Canvas applies image later
       }
+      
+      // Auto-close sidebar on mobile after selecting an image
+      if (window.innerWidth < 768) {
+        setIsSidebarOpen(false);
+      }
     }
   };
   
@@ -309,6 +325,26 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  // Check window size to set initial sidebar state
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+      }
+    };
+
+    // Set initial state
+    handleResize();
+
+    // Add event listener
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
   
   // Determine if undo/redo are available
   const canUndo = () => {
@@ -326,18 +362,93 @@ function App() {
   const selectedImage = selectedImageIndex !== null ? images[selectedImageIndex] : null;
   const currentHistoryEntry = getCurrentHistoryEntry();
 
+  // Toggle sidebar function
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
   return (
-    <div className="h-screen w-screen bg-gray-200 flex flex-col font-sans">
-      <header className="bg-white shadow-md z-10">
-        <h1 className="text-xl font-bold p-4">Floor Plan Editor</h1>
+    <div className="h-screen w-screen bg-gray-50 dark:bg-dark-canvas flex flex-col font-sans overflow-hidden transition-colors duration-300">
+      {/* App Header */}
+      <header className="bg-white dark:bg-dark-sidebar border-b border-gray-200 dark:border-dark-border shadow-sm z-20 transition-colors duration-300">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <button 
+                onClick={toggleSidebar}
+                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 md:hidden transition-colors duration-300"
+                aria-label="Toggle sidebar"
+              >
+                {isSidebarOpen ? <FaTimes /> : <FaBars />}
+              </button>
+              <div className="flex items-center gap-2">
+                <FaHome className="text-primary-600 dark:text-primary-400 text-xl" />
+                <h1 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">
+                  Floor Plan Editor
+                </h1>
+              </div>
+              <div className="flex items-center space-x-4">
+                <button 
+                  onClick={() => setIsInfoModalOpen(true)}
+                  className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                  title="About the developer"
+                >
+                  <span className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm transition-all duration-150">About Me</span>
+                </button>
+                <ThemeToggle />
+              </div>
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
+              {selectedImage && `Editing: ${selectedImage.name}`}
+            </div>
+          </div>
+        </div>
       </header>
-      <div className="flex flex-grow overflow-hidden">
-        <Sidebar 
-          images={images} 
-          onImageUpload={handleImageUpload}
-          onImageSelect={handleImageSelect}
-          selectedImageIndex={selectedImageIndex}
-        />
+
+      {/* Main Content Area */}
+      <div className="flex flex-grow overflow-hidden relative">
+        {/* Sidebar - Animated for mobile */}
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <motion.div
+              initial={{ x: -320 }} 
+              animate={{ x: 0 }}
+              exit={{ x: -320 }}
+              transition={{ type: "spring", bounce: 0.1, duration: 0.5 }}
+              className="absolute md:relative z-20 h-full md:block"
+            >
+              <Sidebar 
+                images={images} 
+                onImageUpload={handleImageUpload}
+                onImageSelect={handleImageSelect}
+                selectedImageIndex={selectedImageIndex}
+                onClose={() => setIsSidebarOpen(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Sidebar Toggle Button - Visible on larger screens */}
+        <div 
+          className="hidden md:flex absolute left-0 top-1/2 transform -translate-y-1/2 z-30"
+          style={{ marginLeft: isSidebarOpen ? '260px' : '0px' }}
+        >
+          <button
+            onClick={toggleSidebar}
+            className="bg-white dark:bg-dark-sidebar rounded-r-md p-1 shadow-md border border-l-0 border-gray-200 dark:border-dark-border text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-300"
+          >
+            {isSidebarOpen ? <FaChevronLeft /> : <FaChevronRight />}
+          </button>
+        </div>
+
+        {/* Semi-transparent overlay for mobile when sidebar is open */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-10 md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          ></div>
+        )}
+
         <main className="flex-grow flex flex-col">
           <Toolbar 
             activeTool={toolState.activeTool}
@@ -364,7 +475,32 @@ function App() {
           />
         </main>
       </div>
-      </div>
+
+      {/* Empty image state - show only when sidebar is closed on mobile and no image selected */}
+      {!selectedImage && !isSidebarOpen && (
+        <div className="absolute inset-0 flex items-center justify-center z-5">
+          <div className="text-center p-8 bg-white dark:bg-dark-card rounded-xl shadow-xl max-w-md mx-auto border border-gray-100 dark:border-dark-border transition-colors duration-300">
+            <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FaHome className="text-2xl text-primary-600 dark:text-primary-400" />
+            </div>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-2">No Floor Plan Selected</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">Open the sidebar to upload or select a floor plan to edit</p>
+            <button 
+              onClick={toggleSidebar} 
+              className="bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white font-medium py-2.5 px-5 rounded-lg transition-colors shadow-sm"
+            >
+              <FaBars className="inline mr-2" /> Open Sidebar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {isInfoModalOpen && (
+          <DeveloperInfo onClose={() => setIsInfoModalOpen(false)} />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

@@ -5,6 +5,7 @@ export const TOOLS = {
   POINTER: 'pointer',
   MAGIC_BRUSH: 'magic_brush',
   TEXT: 'text',
+  COLOR_PICKER: 'color_picker',
 };
 
 /**
