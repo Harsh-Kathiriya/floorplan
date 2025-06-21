@@ -4,8 +4,6 @@
 
 An interactive web-based floor plan editor that allows users to upload, edit, and customize floor plans with various tools and features.
 
-![Floor Plan Editor Screenshot](./src/assets/1I2A2601.JPG)
-
 ## 🌟 Features
 
 - **Upload & Manage Multiple Floor Plans**: Upload and switch between multiple floor plan images
