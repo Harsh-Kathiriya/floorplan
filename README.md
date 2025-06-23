@@ -4,6 +4,7 @@
 
 An interactive web-based floor plan editor that allows users to upload, edit, and customize floor plans with various tools and features.
 
+
 ## 🌟 Features
 
 - **Upload & Manage Multiple Floor Plans**: Upload and switch between multiple floor plan images
@@ -16,9 +17,11 @@ An interactive web-based floor plan editor that allows users to upload, edit, an
 - **Save & Export**: Download edited floor plans as PNG images
 - **Dark/Light Mode**: Toggle between dark and light themes
 
+
 ## 🚀 Live Demo
 
 Visit the live application: [Floor Plan Editor](https://floorplan-nu.vercel.app/)
+
 
 ## 🛠️ Technologies Used
 
@@ -31,10 +34,12 @@ Visit the live application: [Floor Plan Editor](https://floorplan-nu.vercel.app/
 - **React Icons**: Icon library
 - **Canvas API**: For drawing and image manipulation
 
+
 ## 📋 Prerequisites
 
 - Node.js (v16 or higher)
 - npm or yarn
+
 
 ## 🔧 Installation
 
@@ -60,6 +65,7 @@ Visit the live application: [Floor Plan Editor](https://floorplan-nu.vercel.app/
 
 4. Open your browser and navigate to `http://localhost:5173`
 
+
 ## 📝 Usage Guide
 
 1. **Upload a Floor Plan**:
@@ -76,21 +82,54 @@ Visit the live application: [Floor Plan Editor](https://floorplan-nu.vercel.app/
 3. **Save Your Work**:
    - Click the "Save" button to download your edited floor plan as a PNG image
 
+
 ## 🏗️ Project Structure
 
 ```
 floorplan-editor/
 ├── src/
-│   ├── components/      # React components
-│   ├── contexts/        # React contexts
-│   ├── hooks/           # Custom React hooks
-│   ├── utils/           # Utility functions
-│   ├── assets/          # Static assets
-│   ├── App.jsx          # Main application component
+│   ├── components/      # React components for UI elements
+│   ├── contexts/        # React Context for global state management (e.g., ToolContext)
+│   ├── hooks/           # Custom React hooks for complex logic (e.g., useFloodFill)
+│   ├── utils/           # Helper functions for canvas, colors, and history
+│   ├── assets/          # Static assets like images and icons
+│   ├── App.jsx          # Main application component and state orchestrator
 │   └── main.jsx         # Application entry point
 ├── public/              # Public assets
 └── index.html           # HTML entry point
 ```
+
+
+## 🛠️ Implementation Details
+
+This section covers the core concepts behind the editor's functionality.
+
+### Core Architecture & State Management
+
+- **Central State (`App.jsx`)**: `App.jsx` is the main component, managing global state such as the image list and the `editHistory` object.
+  
+- **Per-Image History** (TODO - Implement a better approach to improve memory efficiency): The editor maintains a separate undo/redo stack for each image. Each history entry is a complete snapshot of the canvas `ImageData` and all text elements. This approach is simple and reliable but can be memory-intensive.
+  
+- **Tooling State (`ToolContext`)**: To avoid prop-drilling, `ToolContext` provides shared state (active tool, selected color, etc.) from the `useToolState` hook directly to components like the `Toolbar` and `Canvas`.
+
+### Canvas & Rendering
+
+Performance is optimized using a layered approach with three distinct `<canvas>` elements:
+
+1.  **Image Canvas (Bottom)**: Renders the base image and permanent color fills.
+2.  **Text Canvas (Middle)**: A transparent layer dedicated to drawing text elements.
+3.  **Interaction Canvas (Top)**: Handles all user input (mouse/touch) and renders temporary visuals like selection boxes.
+
+### Key Feature Implementation
+
+- **Magic Fill**: The `useFloodFill` hook implements a queue-based **Flood Fill algorithm**. It returns an array of pixels within a specified color `tolerance`, which the `Canvas` component then colors.
+  
+- **Text Tool**: Clicking the canvas with the Text tool renders a `TextInput` component. On submission, the text is added to the state and drawn onto the Text Canvas.
+  
+- **Undo/Redo History**: The `historyUtils.js` module manages the history stack. After each edit, a new state snapshot is created, and `areHistoryEntriesEqual` prevents storing duplicate states. The undo/redo functions simply navigate through this array of snapshots.
+
+- **Marquee Selection**: The user draws a selection rectangle on the Interaction Canvas. A contextual button then appears, allowing the user to fill the selected area on the Image Canvas.
+
 
 ## 🚢 Deployment
 
@@ -101,6 +140,7 @@ The application is deployed on Vercel. To deploy your own version:
 3. Import your forked repository
 4. Deploy with default settings
 
+
 ## 🧰 Development
 
 ### Available Scripts
@@ -110,9 +150,11 @@ The application is deployed on Vercel. To deploy your own version:
 - `npm run lint` - Run ESLint to check for code issues
 - `npm run preview` - Preview the production build locally
 
+
 ## 👨‍💻 Developer
 
 This project was developed by Harsh Kathiriya, a Computer Science student at the University of Alabama.
+
 
 ## 📄 License
 
