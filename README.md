@@ -2,7 +2,7 @@
 
 [![Live Demo](https://img.shields.io/badge/demo-online-green.svg)](https://floorplan-nu.vercel.app/)
 
-An interactive web-based floor plan editor that allows users to upload, edit, and customize floor plans with various tools and features.
+An interactive web-based floor plan editor that allows users to upload, edit, and customize floor plans with various tools and features. I built this to help the departments at my University.
 
 
 ## 🌟 Features
